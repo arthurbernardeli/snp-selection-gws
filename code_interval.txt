@@ -1,0 +1,50 @@
+rm(list=ls())
+setwd("C:\\Users\\arthu\\Desktop\\gy irrig")
+#install.packages("stringi")
+require(stringi)
+
+load("Coef_Fe1_Fi1_gyirrig.RData");
+a<-Coef_Fe1_Fi1_gyirrig
+loc1<-data.frame(do.call(rbind,(strsplit(a$snp,"[_]"))));head(loc1)
+loc1$chr<-loc1$X1
+loc1$position<-loc1$X2;head(loc1)
+loc1<-loc1[,c(3:4)];head(loc1)
+dados.a<-cbind(loc1,a);head(dados.a)
+dados.a$position <- as.numeric(as.character(dados.a$position))
+
+d5 <- list()
+for(i in 1:length(levels(factor(dados.a$chr)))){
+#i=1
+	d1 <- dados.a[dados.a$chr==levels(factor(dados.a$chr))[i],]
+	d1$B <- d1$position-(min(d1$position)-1)
+	if(round(max(d1$B)/1000,0) < max(d1$B)) { b <- round(max(d1$B)/1000,0) + 1 }
+	if(round(max(d1$B)/1000,0) >= max(d1$B)) { b <- round(max(d1$B)/1000,0) }
+
+	d3 <- list()
+	for(j in 1:b){
+		if(j==1) { d2 <- d1[d1$B >= 1,]
+				d2 <- d2[d2$B < (j*1000),]}
+		if(j!=1) { d2 <- d1[d1$B >= (j-1)*1000,]
+				d2 <- d2[d2$B < (j*1000),]}
+		if(nrow(d2)==0){ next }
+		d2$Bloc <- j
+		d3[[j]] <- d2
+		}
+
+	d4 <- do.call(rbind,d3)
+	d5[[i]] <- d4
+	}
+d6<-do.call(rbind,d5);head(d6);tail(d6);dim(d6)
+
+d5.1<-data.frame(d6)
+head(d5.1)
+
+block<-stri_replace_all_fixed(paste(d5.1$chr,"_",d5.1$Bloc), " ","")
+block<-data.frame(block=block)
+dim(block)
+head(block)
+
+blocks<-cbind(d5.1,block)
+head(blocks);tail(blocks);dim(blocks)
+
+save(blocks,file="blocks.RData",version=2)

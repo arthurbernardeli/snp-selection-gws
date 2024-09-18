@@ -1,0 +1,383 @@
+###################################################
+# 	    Seleção de marcadores                   #
+###################################################
+
+require(AGHmatrix)
+require(MASS)
+require(plyr)
+require(leaps)
+require(asreml)
+require(asremlPlus)
+require(doBy)
+require(ggplot2)
+rm(list=ls())
+setwd("C:\\Users\\arthu\\Desktop\\gy irrig")
+load("hybrid.gen.RData")
+load("Coef_Fe1_Fi1_gyirrig.RData")
+load("blue.gy.irrig.RData")
+
+TT3[1:5,1:5]
+final<-Coef_Fe1_Fi1_gyirrig
+head(final)
+head(blue.gy.irrig)
+B1<-blue.gy.irrig
+
+str(TT3)
+str(final)
+str(B1)
+B1$ano<-factor(B1$ano)
+B1$Hyb<-factor(B1$hybrid)
+
+#porcentagem de marcadores
+
+dsnp <- final[order((final$efeito),decreasing=T),1:5]
+head(final)
+tail(final)
+head(dsnp)
+tail(dsnp)
+summary(final$efeito)
+
+dim(dsnp)
+
+dsnp$list15 <- c(rep(1:6,each = round(57293*.15)),rep(7,nrow(dsnp)-round(57293*.15)*6))
+dsnp$list10 <- c(rep(1:9,each = round(57293*.1)),rep(10,nrow(dsnp)-round(57293*.1)*9))
+dsnp$list05 <- c(rep(1:19,each = round(57293*.05)),rep(20,nrow(dsnp)-round(57293*.05)*19))
+dsnp$list02 <- c(rep(1:49,each = round(57293*.02)),rep(50,nrow(dsnp)-round(57293*.02)*49))
+dsnp$list01 <- c(rep(1:99,each = round(57293*.01)),rep(100,nrow(dsnp)-round(57293*.01)*99))
+dsnp$list001<- c(rep(1:999,each = round (57293*.001)),rep(1000,nrow(dsnp)-round(57293*.001)*999))
+
+# Gerar os 5 folders
+
+set.seed(1)
+f <- data.frame(f01=sample(rep(1:4,77)[1:308], 308, replace=F),f02=sample(rep(1:4,77)[1:308], 308, replace=F),
+		    f03=sample(rep(1:4,77)[1:308], 308, replace=F),f04=sample(rep(1:4,77)[1:308], 308, replace=F))
+			
+INF <- data.frame(H=levels(factor(B1$Hyb)),f)
+for(i in 1:nrow(INF)){
+	B1$f01[B1$Hyb==paste0(INF[i,1])] <- INF[i,2] 
+	B1$f02[B1$Hyb==paste0(INF[i,1])] <- INF[i,3] 
+	B1$f03[B1$Hyb==paste0(INF[i,1])] <- INF[i,4] 
+	B1$f04[B1$Hyb==paste0(INF[i,1])] <- INF[i,5] 
+	}
+
+head(B1)
+
+## Acurácias baseado na seleção de marcadores
+
+sel<-list()
+for(i in 1:1){   ## 0 snp, sem kinship, n=1
+#for(i in 1:10){ ## de 0.1 a 1%, a cada 0.1%, n=10
+#for(i in 2:30){ ## de 2 a 30%, a cada 1%, n=29
+#for(i in 7:20){ ## de 35 a 100%, a cada 5%, n=14, ntotal=54
+
+	mS <- dsnp[dsnp$list001 <= i,]  ## o que se deseja selecionar
+	#mS <- dsnp[dsnp$list001 <= i,] ## o que se deseja selecionar
+	#mS <- dsnp[dsnp$list01 <= i,]  ## o que se deseja selecionar
+	#mS <- dsnp[dsnp$list05 <= i,]  ## o que se deseja selecionar
+
+	S <- which(colnames(TT3) %in% mS$snp)
+	H <- as.matrix(TT3[,c(S)]) ## Matrix de uso, selecionandoo colunas
+
+	Gmatrix.VanRaden <- Gmatrix(H, method="VanRaden", missingValue=-9, maf=0)
+	mat <- diag(x = 0.00001, nrow=nrow(Gmatrix.VanRaden), ncol=ncol(Gmatrix.VanRaden))
+	invGmatrix.VanRaden <- ginv(as.matrix(Gmatrix.VanRaden+mat))
+	#invGmatrix.VanRaden <- ginv(Gmatrix.VanRaden)
+	invkGVR<-formatmatrix(invGmatrix.VanRaden,return=TRUE) ## transformando numa matrix triangular inferior
+	colnames(invkGVR)<-c("Row", "Column","value")
+	Hyb_invk_GVR <- data.frame(invkGVR) 
+	attr(Hyb_invk_GVR,"rowNames") <- as.character(colnames(Gmatrix.VanRaden))
+	attr(Hyb_invk_GVR,"colNames")<-  as.character(colnames(Gmatrix.VanRaden))
+	attr(Hyb_invk_GVR,"INVERSE")<-TRUE
+	
+		cor1 <- list()
+		#for(Fe in 1:2){
+		for(Fe in 1){
+	
+			cor <- list()	
+			#for(Fi in 1:4){
+			for(Fi in 1){
+
+					B1$resp <- B1$predicted.value
+					if(Fi==1) { B1$resp[B1[,(Fe+10)]==1] <- NA }
+					if(Fi==2) { B1$resp[B1[,(Fe+10)]==2] <- NA }
+					if(Fi==3) { B1$resp[B1[,(Fe+10)]==3] <- NA }
+					if(Fi==4) { B1$resp[B1[,(Fe+10)]==4] <- NA }
+
+					#fr <- as.formula(paste0("~","vm(Hyb, Hyb_invk_GVR)"))
+					print(paste0("selec",i,"_Fe",Fe,"_Fi",Fi))
+					fid <- asreml(fixed = resp ~ ano,
+						random =  ~Hyb,
+						weights=W, na.action=na.method(x="omit"),
+						ran.order = "user",
+						workspace = 128e06, maxiter = 100, data = B1)
+					
+
+					#fr <- as.formula(paste0("~","vm(Hyb, Hyb_invk_GVR)"))
+					#print(paste0("selec",i,"_Fe",Fe,"_Fi",Fi))
+					#fid <- asreml(fixed = resp ~ ano,
+					#	random =  ~vm(Hyb, Hyb_invk_GVR),
+					#	weights=W, na.action=na.method(x="omit"),
+					#	ran.order = "user",
+					#	workspace = 128e06, maxiter = 100, data = B1)
+		
+					#fid <- asreml(fixed = resp ~ 1,							#
+					#	random =  ~ giv(Hyb, var=T), ginverse = list(Hyb=Hyb_invk_GVR),	#
+					#	weights=W, na.method.X="omit",						#
+					#	ran.order = "user",								#
+					#	workspace = 128e06, maxiter = 100, data = B1)				#
+
+						#predM <- predict(fid, "Hyb",vcov=TRUE)	#
+						#PP <- predM$prediction$pvals[,1:3]		#
+	
+					B2 <- B1[is.na(B1$resp),];head(B2);dim(B2)
+				
+					B2 <- data.frame(Hyb=rownames(tapply(B2$predicted.value,factor(B2$Hyb),FUN="mean")),
+						predicted.value=tapply(B2$predicted.value,factor(B2$Hyb),FUN="mean"));
+					#B2$Hyb<-factor(B2$Hyb);dim(B2);head(B2);str(B2)
+										
+					predM <- predict(fid, "Hyb",vcov=TRUE)
+					PP <- predM$pvals[,1:3];head(PP);dim(PP)
+					#head(PP);str(PP)
+				
+					Merge <- merge(B2,PP,by="Hyb")
+						
+					cor[[Fi]] <- data.frame(selec_snp=i,
+							var="gy_irrig",
+							Fe=Fe,Fi=Fi,
+							CorH=cor(Merge$predicted.value.x,Merge$predicted.value.y),
+							infoCriteria(fid, IClikelihood = "full"))
+					}
+				cor10 <- do.call(rbind,cor)
+				cor1[[Fe]] <- cor10
+				}
+		sel10 <- do.call(rbind,cor1)
+		sel [[i]]<-sel10
+	}
+sel<-do.call(rbind,sel)
+sel
+
+#list.null<-sel; list.null$selec_snp[list.null$selec_snp=="1"]<-"0"
+#list001<-sel
+#list01<-sel
+#list05<-sel
+
+list<-rbind(list.null,list001,list01,list05)
+
+
+###########
+
+fun <- function(x){
+	 c(mean=mean(x),sd=sd(x))
+			}
+
+
+summary.null<-summaryBy(cbind(CorH, AIC, BIC) ~ selec_snp+var, data=list.null, FUN=fun)
+summary001<-summaryBy(cbind(CorH, AIC, BIC) ~ selec_snp+var, data=list001, FUN=fun)
+summary01<-summaryBy(cbind(CorH, AIC, BIC) ~ selec_snp+var, data=list01, FUN=fun)
+summary05<-summaryBy(cbind(CorH, AIC, BIC) ~ selec_snp+var, data=list05, FUN=fun)
+
+summary<-rbind(summary.null,summary001,summary01,summary05)
+dim(summary)
+head(summary)
+
+snp_portion<-data.frame(snp_portion=matrix(c(0,seq(from = 0.001*100, to = 0.01*100, .001*100),
+							     seq(from = 0.02*100, to = 0.3*100, .01*100),
+							     seq(from = 0.35*100, to = 1*100, .05*100)),54,1))
+gws<-cbind(snp_portion,summary)
+dim(gws)
+write.table(summary,"C:\\Users\\arthu\\Dropbox\\EMBRAPA_Analyses\\Reunião 5\\GWAS\\gy irrig\\gws.gy.irrig.txt")
+
+##gráfico de dispersão
+
+#########
+
+med<-ggplot(gws,aes(x=snp_portion,y=CorH.mean))+
+	theme_set(theme_grey()+
+	theme(legend.position = "top"))+
+	geom_point(aes())+
+	geom_line(aes())+
+	labs(x = "SNP Portion (%)",y = "Prediction Accuracy - Mean",title = "Grain yield, water stressed")
+
+
+dev<-ggplot(gws,aes(x=snp_portion,y=CorH.sd))+
+	theme_set(theme_grey()+
+	theme(legend.position = "top"))+
+	geom_point(aes())+
+	geom_line(aes())+
+	labs( x = "SNP Portion (%)",y = "Prediction Accuracy - Std. Deviation",title = "Grain yield, water stressed")
+
+
+
+
+###################################################
+# 	    Seleção aleatória de marcadores       #
+###################################################
+
+require(AGHmatrix)
+require(MASS)
+require(plyr)
+require(leaps)
+require(asreml)
+require(asremlPlus)
+require(doBy)
+require(ggplot2)
+rm(list=ls())
+setwd("C:\\Users\\arthu\\Desktop\\gy irrig")
+load("hybrid.gen.RData")
+load("Coef_Fe1_Fi1_gyirrig.RData")
+load("blue.gy.irrig.RData")
+
+TT3[1:5,1:5]
+final<-Coef_Fe1_Fi1_gyirrig
+#head(final)
+#head(blue.gy.irrig)
+B1<-blue.gy.irrig
+
+#str(TT3)
+#str(final)
+#str(B1)
+B1$ano<-factor(B1$ano)
+B1$Hyb<-factor(B1$hybrid)
+
+#porcentagem de marcadores
+
+dsnp <- final[order((final$efeito),decreasing=T),1:5]
+#head(final)
+#tail(final)
+#head(dsnp)
+#tail(dsnp)
+#summary(final$efeito)
+
+#dim(dsnp)
+
+#dsnp$list15 <- c(rep(1:6,each = round(57293*.15)),rep(7,nrow(dsnp)-round(57293*.15)*6))
+#dsnp$list10 <- c(rep(1:9,each = round(57293*.1)),rep(10,nrow(dsnp)-round(57293*.1)*9))
+#dsnp$list05 <- c(rep(1:19,each = round(57293*.05)),rep(20,nrow(dsnp)-round(57293*.05)*19))
+#dsnp$list02 <- c(rep(1:49,each = round(57293*.02)),rep(50,nrow(dsnp)-round(57293*.02)*49))
+#dsnp$list01 <- c(rep(1:99,each = round(57293*.01)),rep(100,nrow(dsnp)-round(57293*.01)*99))
+#dsnp$list001<- c(rep(1:999,each = round (57293*.001)),rep(1000,nrow(dsnp)-round(57293*.001)*999))
+
+# Gerar os 5 folders
+
+set.seed(1)
+f <- data.frame(f01=sample(rep(1:4,77)[1:308], 308, replace=F),f02=sample(rep(1:4,77)[1:308], 308, replace=F),
+		    f03=sample(rep(1:4,77)[1:308], 308, replace=F),f04=sample(rep(1:4,77)[1:308], 308, replace=F))
+			
+INF <- data.frame(H=levels(factor(B1$Hyb)),f)
+for(i in 1:nrow(INF)){
+	B1$f01[B1$Hyb==paste0(INF[i,1])] <- INF[i,2] 
+	B1$f02[B1$Hyb==paste0(INF[i,1])] <- INF[i,3] 
+	B1$f03[B1$Hyb==paste0(INF[i,1])] <- INF[i,4] 
+	B1$f04[B1$Hyb==paste0(INF[i,1])] <- INF[i,5] 
+	}
+
+head(B1)
+
+## Acurácias baseado na seleção de marcadores
+
+sel <- list()
+ss <- c(seq(from = 0.001, to = 0.01, .001),seq(from = 0.02, to = 0.29, .01),seq(from = 0.30, to = 1, .05))
+#for(i in 1:length(ss)){
+i=1
+	set.seed(i)
+	mS <- sample(1:nrow(dsnp), round(nrow(dsnp)*ss[i]), replace=TRUE)
+	H <- as.matrix(TT3[,c(mS)]) ## Matrix de uso
+
+	Gmatrix.VanRaden <- Gmatrix(H, method="VanRaden", missingValue=-9, maf=0)
+	mat <- diag(x = 0.00001, nrow=nrow(Gmatrix.VanRaden), ncol=ncol(Gmatrix.VanRaden))
+	invGmatrix.VanRaden <- ginv(as.matrix(Gmatrix.VanRaden+mat))
+	#invGmatrix.VanRaden <- ginv(Gmatrix.VanRaden)
+	invkGVR<-formatmatrix(invGmatrix.VanRaden,return=TRUE) ## transformando numa matrix triangular inferior
+	colnames(invkGVR)<-c("Row", "Column","value")
+	Hyb_invk_GVR <- data.frame(invkGVR) 
+	attr(Hyb_invk_GVR,"rowNames") <- as.character(colnames(Gmatrix.VanRaden))
+	attr(Hyb_invk_GVR,"colNames")<-  as.character(colnames(Gmatrix.VanRaden))
+	attr(Hyb_invk_GVR,"INVERSE")<-TRUE
+	
+		cor1 <- list()
+		for(Fe in 1:2){
+		#for(Fe in 1:1){
+		#for(Fe in 2:2){
+			
+			cor <- list()	
+			for(Fi in 1:4){
+			#for(Fi in 1:2){
+			#for(Fi in 1:4){
+			
+
+					B1$resp <- B1$predicted.value
+					if(Fi==1) { B1$resp[B1[,(Fe+10)]==1] <- NA }
+					if(Fi==2) { B1$resp[B1[,(Fe+10)]==2] <- NA }
+					if(Fi==3) { B1$resp[B1[,(Fe+10)]==3] <- NA }
+					if(Fi==4) { B1$resp[B1[,(Fe+10)]==4] <- NA }
+
+					#fr <- as.formula(paste0("~","vm(Hyb, Hyb_invk_GVR)"))
+					print(paste0("selec",i,"_Fe",Fe,"_Fi",Fi))
+					fid <- asreml(fixed = resp ~ ano,
+						random =  ~Hyb,
+						weights=W, na.action=na.method(x="omit"),
+						ran.order = "user",
+						workspace = 128e06, maxiter = 100, data = B1)
+					
+
+					#fr <- as.formula(paste0("~","vm(Hyb, Hyb_invk_GVR)"))
+					#print(paste0("selec",i,"_Fe",Fe,"_Fi",Fi))
+					#fid <- asreml(fixed = resp ~ ano,
+					#	random =  ~vm(Hyb, Hyb_invk_GVR),
+					#	weights=W, na.action=na.method(x="omit"),
+					#	ran.order = "user",
+					#	workspace = 128e06, maxiter = 100, data = B1)
+		
+					#fid <- asreml(fixed = resp ~ 1,							#
+					#	random =  ~ giv(Hyb, var=T), ginverse = list(Hyb=Hyb_invk_GVR),	#
+					#	weights=W, na.method.X="omit",						#
+					#	ran.order = "user",								#
+					#	workspace = 128e06, maxiter = 100, data = B1)				#
+
+						#predM <- predict(fid, "Hyb",vcov=TRUE)	#
+						#PP <- predM$prediction$pvals[,1:3]		#
+	
+					B2 <- B1[is.na(B1$resp),];head(B2);dim(B2)
+				
+					B2 <- data.frame(Hyb=rownames(tapply(B2$predicted.value,factor(B2$Hyb),FUN="mean")),
+						predicted.value=tapply(B2$predicted.value,factor(B2$Hyb),FUN="mean"));
+					#B2$Hyb<-factor(B2$Hyb);dim(B2);head(B2);str(B2)
+										
+					predM <- predict(fid, "Hyb",vcov=TRUE)
+					PP <- predM$pvals[,1:3];head(PP);dim(PP)
+					#head(PP);str(PP)
+				
+					Merge <- merge(B2,PP,by="Hyb")
+						
+					cor[[Fi]] <- data.frame(selec_snp=i,
+							var="gy_irrig",
+							Fe=Fe,Fi=Fi,
+							CorH=cor(Merge$predicted.value.x,Merge$predicted.value.y),
+							infoCriteria(fid, IClikelihood = "full"))
+					}
+				cor10 <- do.call(rbind,cor)
+				cor1[[Fe]] <- cor10
+				}
+		sel10 <- do.call(rbind,cor1)
+		sel [[i]]<-sel10
+#	}
+sel<-do.call(rbind,sel)
+sel
+
+#list1<-sel
+#list2<-sel
+list.null<-sel; list.null$selec_snp[list.null$selec_snp=="1"]<-"0"
+
+list<-rbind(list.null,list1,list2)
+
+fun <- function(x){
+	 c(mean=mean(x))
+			}
+
+summary<-summaryBy(CorH ~ selec_snp+var, data=list,FUN=fun)
+
+seq<-data.frame(snp.portion=c(0,seq(from = 0.001*100, to = 0.01*100, .001*100),seq(from = 0.02*100, to = 0.29*100, .01*100),seq(from = 0.30*100, to = 1*100, .05*100)))
+
+acc<-cbind(seq,summary)
+dim(acc)
+head(acc)

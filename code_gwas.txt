@@ -1,0 +1,134 @@
+########################
+# GWAS - efeito marcas #
+########################
+
+setwd("C:\\Users\\arthu\\Desktop\\gy irrig")
+rm(list=ls())
+require(plyr)
+require(leaps)
+require(asreml)
+require(asremlPlus)
+require(AGHmatrix)
+require(MASS)
+
+load("hybrid.gen.RData")
+load("blue.gy.irrig.RData")
+head(blue.gy.irrig)
+B1<-blue.gy.irrig
+
+B1$ano<-factor(B1$ano)
+B1$Hyb<-factor(B1$hybrid)
+
+
+##############
+
+# Gerar os 5 folders
+set.seed(1)
+f <- data.frame(f01=sample(rep(1:4,77)[1:308], 308, replace=F),f02=sample(rep(1:4,77)[1:308], 308, replace=F),
+		    f03=sample(rep(1:4,77)[1:308], 308, replace=F),f04=sample(rep(1:4,77)[1:308], 308, replace=F))
+			
+INF <- data.frame(H=levels(factor(B1$Hyb)),f)
+for(i in 1:nrow(INF)){
+	B1$f01[B1$Hyb==paste0(INF[i,1])] <- INF[i,2] 
+	B1$f02[B1$Hyb==paste0(INF[i,1])] <- INF[i,3] 
+	B1$f03[B1$Hyb==paste0(INF[i,1])] <- INF[i,4] 
+	B1$f04[B1$Hyb==paste0(INF[i,1])] <- INF[i,5] 
+	}
+
+head(B1)
+
+###############
+
+cor1 <- list()
+#for(Fe in 1:2){
+for(Fe in 1){
+
+	cor <- list()	
+	#for(Fi in 1:4){
+	for(Fi in 2){
+		
+	B1$resp <- B1$predicted.value
+	if(Fi==1) { B1$resp[B1[,(Fe+10)]==1] <- NA }
+	if(Fi==2) { B1$resp[B1[,(Fe+10)]==2] <- NA }
+	if(Fi==3) { B1$resp[B1[,(Fe+10)]==3] <- NA }
+	if(Fi==4) { B1$resp[B1[,(Fe+10)]==4] <- NA }
+
+	B11<-B1[which(B1$resp != "NA"), ] #matriz de fenótipos, híbridos com NA removidos
+
+	inf<-read.table("Inf.txt",h=T)
+	#TT3[1:5,1:5]
+	#head(B11)
+	#head(inf)
+	list<-data.frame(hybrid=rownames(TT3))
+	#str(list)
+	hyb.gen<-cbind(data.frame(hybrid=list$hybrid),TT3) 
+	#hyb.gen[1:5,1:5]
+	#rownames(TT3)==hyb.gen$hybrid
+	B11$hybrid<-factor(B11$hybrid)
+	hyb.gen$hybrid<-factor(hyb.gen$hybrid)
+	memory.limit(size=111111111)
+	blue.snp = merge(B11,hyb.gen,by="hybrid") #matriz de fenótipos + genótipos, hibridos com NA removidos
+	#blue.snp[1:5,1:20]	
+
+	entry<-unique(levels(factor(B11$hybrid)))
+	H <- as.matrix(TT3[c(entry),])				 #matriz de genótipos de híbridos sem NA, selecionando linhas 
+	Gmatrix.VanRaden <- Gmatrix(H, method="VanRaden", missingValue=-9, maf=0)
+	mat <- diag(x = 0.00001, nrow=nrow(Gmatrix.VanRaden), ncol=ncol(Gmatrix.VanRaden))
+	invGmatrix.VanRaden <- ginv(as.matrix(Gmatrix.VanRaden+mat))
+	#invGmatrix.VanRaden <- ginv(Gmatrix.VanRaden)
+	invkGVR<-formatmatrix(invGmatrix.VanRaden,return=TRUE) # transformando numa matrix triangular inferior
+	colnames(invkGVR)<-c("Row", "Column","value")
+	Hyb_invk_GVR <- data.frame(invkGVR) 
+	attr(Hyb_invk_GVR,"rowNames") <- as.character(colnames(Gmatrix.VanRaden))
+	attr(Hyb_invk_GVR,"colNames")<-  as.character(colnames(Gmatrix.VanRaden))
+	attr(Hyb_invk_GVR,"INVERSE")<-TRUE
+
+	INFS <- c(seq(1,ncol(H),100),ncol(H)) ### Calculo dos pesos dos SNPs, será realizado de 20 em 20
+	blue.snp$ano<-factor(blue.snp$ano)
+	blue.snp$hybrid<-factor(blue.snp$hybrid)
+	
+		coef <- list()
+		for(i in 1:length(INFS)){
+		#for(i in 1:2){
+		
+		d1 <- data.frame(blue.snp[,1:15],blue.snp[,(15+INFS[i]):(15+INFS[1+i]-1)])
+
+		fit <- asreml(fixed = predicted.value ~ ano,
+		random = ~ idv(ano):vm(hybrid,Hyb_invk_GVR),
+		weights=W,
+		ran.order = "user", 
+		na.action=na.method(x="omit"),
+		workspace = 128e06, maxiter = 100, data = d1)
+
+			coef1 <- list()
+			for(s in 1:(INFS[i+1]-INFS[i])){
+			#for(s in 1:2){
+		
+			print(paste0("Fe=",Fe,"_Fi=",Fi,"_gy.irrig","_GWAS","_i=",i,"_s=",s,"_",length(INFS)))
+			fid<- update(fit,fixed=list(as.formula(paste0(".~. + ", colnames(d1)[15+s], " + ", colnames(d1)[15+s],":ano")))[[1]])
+			
+			coef1[[s]] <- data.frame(snp=rownames(coef(fid)$fixed)[3],
+							  snp.ano1=coef(fid)$fixed[1],
+							  snp.ano2=coef(fid)$fixed[2],
+							  efeito.snp=coef(fid)$fixed[3],
+							  efeito=abs(coef(fid)$fixed[3])/
+									(abs(coef(fid)$fixed[1])+
+									abs(coef(fid)$fixed[2])+
+									abs(coef(fid)$fixed[3])))			
+													
+				}
+		coef11<-do.call(rbind,coef1)
+		coef[[i]]<-coef11
+			}
+	cor11<-do.call(rbind,coef)
+	cor[[Fi]]<-cor11
+		}
+cor1[[Fe]]<-cor11
+	}
+cor1<-do.call(rbind,cor1)
+cor1
+
+tail(cor1)
+Coef_Fe1_Fi2_gyirrig<-cor1 ####### mudar de acordo com o for
+
+save(Coef_Fe1_Fi2_gyirrig,file="Coef_Fe1_Fi2_gyirrig.RData",version=2)
