@@ -105,8 +105,8 @@ for(i in 1:1){   ## 0 snp, sem kinship, n=1
 
 					#fr <- as.formula(paste0("~","vm(Hyb, Hyb_invk_GVR)"))
 					print(paste0("selec",i,"_Fe",Fe,"_Fi",Fi))
-					fid <- asreml(fixed = resp ~ ano,
-						random =  ~Hyb,
+					fid <- asreml(fixed = resp ~ env,
+						random =  ~env:Hyb,
 						weights=W, na.action=na.method(x="omit"),
 						ran.order = "user",
 						workspace = 128e06, maxiter = 100, data = B1)
@@ -114,13 +114,13 @@ for(i in 1:1){   ## 0 snp, sem kinship, n=1
 
 					#fr <- as.formula(paste0("~","vm(Hyb, Hyb_invk_GVR)"))
 					#print(paste0("selec",i,"_Fe",Fe,"_Fi",Fi))
-					#fid <- asreml(fixed = resp ~ ano,
-					#	random =  ~vm(Hyb, Hyb_invk_GVR),
+					#fid <- asreml(fixed = resp ~ env,
+					#	random =  ~env:vm(Hyb, Hyb_invk_GVR),
 					#	weights=W, na.action=na.method(x="omit"),
 					#	ran.order = "user",
 					#	workspace = 128e06, maxiter = 100, data = B1)
 		
-					#fid <- asreml(fixed = resp ~ 1,							#
+					#fid <- asreml(fixed = resp ~ env,							#
 					#	random =  ~ giv(Hyb, var=T), ginverse = list(Hyb=Hyb_invk_GVR),	#
 					#	weights=W, na.method.X="omit",						#
 					#	ran.order = "user",								#
