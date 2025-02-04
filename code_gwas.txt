@@ -16,7 +16,7 @@ load("blue.gy.irrig.RData")
 head(blue.gy.irrig)
 B1<-blue.gy.irrig
 
-B1$ano<-factor(B1$ano)
+B1$env<-factor(B1$env)
 B1$Hyb<-factor(B1$hybrid)
 
 
@@ -93,8 +93,8 @@ for(Fe in 1){
 		
 		d1 <- data.frame(blue.snp[,1:15],blue.snp[,(15+INFS[i]):(15+INFS[1+i]-1)])
 
-		fit <- asreml(fixed = predicted.value ~ ano,
-		random = ~ idv(ano):vm(hybrid,Hyb_invk_GVR),
+		fit <- asreml(fixed = predicted.value ~ env,
+		random = ~ idv(env):vm(hybrid,Hyb_invk_GVR),
 		weights=W,
 		ran.order = "user", 
 		na.action=na.method(x="omit"),
@@ -105,11 +105,11 @@ for(Fe in 1){
 			#for(s in 1:2){
 		
 			print(paste0("Fe=",Fe,"_Fi=",Fi,"_gy.irrig","_GWAS","_i=",i,"_s=",s,"_",length(INFS)))
-			fid<- update(fit,fixed=list(as.formula(paste0(".~. + ", colnames(d1)[15+s], " + ", colnames(d1)[15+s],":ano")))[[1]])
+			fid<- update(fit,fixed=list(as.formula(paste0(".~. + ", colnames(d1)[15+s], " + ", colnames(d1)[15+s],":env")))[[1]])
 			
 			coef1[[s]] <- data.frame(snp=rownames(coef(fid)$fixed)[3],
-							  snp.ano1=coef(fid)$fixed[1],
-							  snp.ano2=coef(fid)$fixed[2],
+							  snp.env1=coef(fid)$fixed[1],
+							  snp.env2=coef(fid)$fixed[2],
 							  efeito.snp=coef(fid)$fixed[3],
 							  efeito=abs(coef(fid)$fixed[3])/
 									(abs(coef(fid)$fixed[1])+
