@@ -1,0 +1,138 @@
+##############################################################################################################################
+##############################################################################################################################
+########################################                Hybrid - Fixed                ######################################## 
+##############################################################################################################################
+##############################################################################################################################
+setwd("D:/Dropbox/Trabalho_Parceria/Arthur_MariaMarta/EMBRAPA/Reunião 1/Models/Stage 1")
+rm(list=ls())
+require(asreml)
+
+loc <- c("j2010s","j2010w","j2011s","j2011w","t2010s","t2010w","t2011s","t2011w")
+
+SUMMARY <- WALD <- Blue <- list()
+for(i in 1:length(loc)){
+
+	dd <- list()
+	dd<-read.table(paste0(loc[i],".txt"), h=T)
+	VAR <- colnames(dd)[4:ncol(dd)]
+
+	Summary <- Wald <- means <- list()
+	for(j in 1:length(VAR)){
+
+		y <- dd[,c(1:3,(3+j))]
+		y <- na.omit(y)
+		y$hybrid=factor(y$hybrid)
+		y$set=factor(y$set)
+		y$rep=factor(y$rep)
+
+		if(loc[i]!="t2011w" & loc[i]!="j2011w") {  ## quando tem rep
+			Ff <- as.formula(paste0(VAR[j], " ~ set + hybrid"))
+			M <- asreml(fixed  = Ff,
+				random = ~ rep,
+				na.method.X="omit", na.method.Y="omit", 
+				maxiter = 1000000, data = y)  
+			}
+		if(loc[i]=="t2011w" | loc[i]=="j2011w") {  ## quando não tem rep	
+			Ff <- as.formula(paste0(VAR[j], " ~ hybrid"))
+			M <- asreml(fixed  = Ff,
+				random = ~ set,
+				na.method.X="omit", na.method.Y="omit", 
+				maxiter = 1000000, data = y)  
+			}
+		Summary[[j]] <- summary(M)
+		Wald[[j]] <- wald(M)
+		predM <- predict(M, "hybrid",vcov=TRUE)
+		if(sum(predM$prediction$pvals[,3]) == 0) { next } 
+		means[[j]] <- data.frame(Loc=loc[i],Var=VAR[j],predM$prediction$pvals[,1:3],W=diag(solve(predM$predictions$vcov)))
+		}
+	SUMMARY[[i]] <- Summary
+	WALD[[i]] <- Wald 
+	resp <- do.call(rbind,means)
+	Blue[[i]] <- resp
+	}
+BlueW <- do.call(rbind,Blue)
+save(SUMMARY,WALD,BlueW, file="BlueW.RData", version=2)
+	
+
+
+
+
+
+
+
+
+
+##############################################################################################################################
+##############################################################################################################################
+########################################               Hybrid - Random                ######################################## 
+##############################################################################################################################
+##############################################################################################################################
+setwd("D:/Dropbox/Trabalho_Parceria/Arthur_MariaMarta/EMBRAPA/Reunião 1/Models/Stage 1")
+rm(list=ls())
+require(asreml)
+
+loc <- c("j2010s","j2010w","j2011s","j2011w","t2010s","t2010w","t2011s","t2011w")
+
+out <- list()
+for(i in 1:length(loc)){
+
+	dd <- list()
+	dd<-read.table(paste0(loc[i],".txt"), h=T)
+	VAR <- colnames(dd)[4:ncol(dd)]
+
+	out1 <- list()
+	for(j in 1:length(VAR)){
+
+		y <- dd[,c(1:3,(3+j))]
+		y <- na.omit(y)
+		y$hybrid=factor(y$hybrid)
+		y$set=factor(y$set)
+		y$rep=factor(y$rep)
+
+		if(loc[i]!="t2011w" & loc[i]!="j2011w") {  ## quando tem rep
+			Ff <- as.formula(paste0(VAR[j], " ~ set"))
+			M <- asreml(fixed  = Ff,
+				random = ~ rep + hybrid,
+				na.method.X="omit", na.method.Y="omit", 
+				maxiter = 1000000, data = y)  
+			pred.r <- predict(M, classify = "hybrid",sed = T)
+			PEV <- round((pred.r$predictions$avsed[2]^2),2)
+			var <- round(as.numeric(t(summary(M, all=TRUE)$varcomp[2])),6)
+			hg <- round(1- (PEV/(2*var[2])), 2)
+			hmg <- round(var[2]/((var[1]/length(unique(y$set))) + 
+					var[2]+(var[3]/(length(unique(y$rep))+length(unique(y$set))))),2)
+			med <- round(mean(na.omit(y[,4])),2)
+			cvg <- (sqrt(summary(M, all=TRUE)$varcomp[2,2])/med)*100
+			cve <- (sqrt(summary(M, all=TRUE)$varcomp[2,3])/med)*100
+			cvr <- cvg/cve
+			}
+		if(loc[i]=="t2011w" | loc[i]=="j2011w") {  ## quando não tem rep	
+			Ff <- as.formula(paste0(VAR[j], " ~ 1"))
+			M <- asreml(fixed  = Ff,
+				random = ~ set + hybrid,
+				na.method.X="omit", na.method.Y="omit", 
+				maxiter = 1000000, data = y)  
+			pred.r <- predict(M, classify = "hybrid",sed = T)
+			PEV <- round((pred.r$predictions$avsed[2]^2),2)
+			var <- round(as.numeric(t(summary(M, all=TRUE)$varcomp[2])),6)
+			hg <- round(1- (PEV/(2*var[2])), 2)
+			hmg <- round(var[2]/(var[1]+var[2]+(var[3]/(length(unique(y$set))))),2)
+			med <- round(mean(na.omit(y[,4])),2)
+			cvg <- (sqrt(summary(M, all=TRUE)$varcomp[2,2])/med)*100
+			cve <- (sqrt(summary(M, all=TRUE)$varcomp[2,3])/med)*100
+			cvr <- cvg/cve
+			}
+
+		out1[[j]] <- c(Loc=loc[i],Variavel=colnames(y)[4],as.numeric(round(c(var, hg, hmg, med, cvg, cve, cvr, PEV),4)))
+
+		}
+	OUT <- do.call(rbind,out1)
+	out[[i]] <- OUT
+	}
+ParRand <- do.call(rbind,out)
+colnames(ParRand) <- c("Loc","Variavel","Vb","Vg","Ve", "hg", "hmg", "Med", "CVg", "CVe", "CVr", "PEV")
+ParRand <- data.frame(ParRand)
+save(ParRand, file="1stParGenetic.RData", version=2)
+
+
+
