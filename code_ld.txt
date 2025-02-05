@@ -1,0 +1,80 @@
+#####################preparing data for sommer
+setwd("F:\\Arthur B\\LD")
+require(sommer)
+rm(list=ls())
+gen<-read.table("gengen.txt",h=T)
+gen[1:5,1:5]
+gen[(nrow(gen)-10):nrow(gen),1:5]
+rownames(gen)<-gen$snp
+gen.sommer<-gen[,2:ncol(gen)]-1
+dim(gen.sommer)
+gengen<-t(gen.sommer)
+gengen[1:5,1:5]
+dim(gengen)
+
+dados<-data.frame(marker=c(colnames(gengen)))
+dim(dados)
+
+loc1<-data.frame(do.call(rbind,(strsplit(dados$marker,"[_]"))))
+dim(loc1)
+
+chrom<-data.frame(do.call(rbind,(strsplit(loc1$X1,"[S]"))))
+dim(chrom)
+head(chrom)
+
+loc1$position<-as.numeric(loc1$X2)
+chrom$chrom<-as.numeric(chrom$X2)
+
+LD<-cbind(dados,Position=loc1$X2,Chrom=chrom$X2)
+head(LD);gengen[1:5,1:5]
+###=========================================####
+#### For CRAN time limitations most lines in the
+#### examples are silenced with one '#' mark,
+#### remove them and run the examples using
+#### command + shift + C |OR| control + shift + C
+####=========================================####
+#rm(list=ls())
+
+#### get the marker matrix
+CPgeno <- gengen; CPgeno[1:5,1:5]
+#### get the map
+mapCP <- LD; head(mapCP)
+names(mapCP) <- c("Locus","Position","LG");head(mapCP)
+
+str(CPgeno)
+mapCP$Locus<-factor(mapCP$Locus)
+mapCP$Position<-as.numeric(mapCP$Position)
+mapCP$LG<-as.integer(mapCP$LG)
+str(mapCP)
+
+head(mapCP)
+tail(mapCP)
+
+#### with example purposes we only do 1 chromosomes
+mapCP <- mapCP[which(mapCP$LG == 1),]
+#### run the function
+res <- LD.decay(CPgeno, mapCP)
+names(res)
+#### subset only markers with significant LD
+head(res$all.LG)
+res$all.LG <- res$all.LG[res$all.LG$d<=2000 & res$all.LG$p < .001,]
+head(res$all.LG);dim(res$all.LG);
+#### plot the LD decay
+with(res$all.LG, plot(r2~d,col=transp("cadetblue"),
+xlim=c(0,max(res$all.LG$d)), ylim=c(0,max(res$all.LG$r2)),
+pch=20,cex=0.5,yaxt="n",
+xaxt="n",ylab="R²",
+xlab="Distance (bp)")
+)
+axis(1, at=seq(0,round(max(res$all.LG$d)),round(max(res$all.LG$d)/10)), labels=(seq(0,round(max(res$all.LG$d)),round(max(res$all.LG$d)/10))))
+axis(2,at=seq(0,1,.1), labels=seq(0,1,.1), las=1)
+#### if you want to add the loess regression lines
+#### this could take a long time!!!
+mod <- loess(r2 ~ d, data=res$all.LG)
+par(new=T)
+lilo <- predict(mod,data.frame(d=1:max(res$all.LG$d)))
+plot(lilo, bty="n", xaxt="n", yaxt="n", col="green",
+type="l", ylim=c(0,1),ylab="",xlab="",lwd=2)
+res3 <- LD.decay(markers=CPgeno, map=mapCP,
+unlinked = TRUE,gamma = .95)
+abline(h=res3$all.LG, col="red")
